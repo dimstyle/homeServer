@@ -1,0 +1,94 @@
+#cloud-config 
+
+autoinstall:
+    version: 1
+    identity:
+        hostname: ubuntu-server1
+        username: ubuntuServ
+        password: $6$s.wZJ7j9KljnjxeN$ENgjjoyC4WwXR3ZpmAoMyXO7NL2T6UZ.Np.o1AQoyUOG5q5vQ5VLUn6/Txo8swTWwOO4FNWO92PIJYygrIJHO0
+    
+    ssh:
+        install-server: true
+        allow-pw: true
+
+    locale: en_US.UTF-8
+    keyboard:
+        layout: us
+    
+    packages:
+        - nano 
+        - curl
+        - git 
+        - docker.io 
+        - nginx
+        - build-essential
+        - pkg-config 
+        - cmake 
+        - libssl-dev
+    
+    storage:
+        config:
+            # disk setup
+            - type: disk
+              ptable: gpt
+              match:
+                serial: ubuntu-disk
+              id: disk0 
+              wipe: superblock
+
+            # efi 
+            - type: partition
+              size: 800M
+              device: disk0
+              id: efi-partition
+              flag: boot
+              grub_device: true
+
+            - type: format
+              id: efi-fs 
+              volume: efi-partition
+              fstype: fat32
+            
+            - type: mount
+              id: efi-mount
+              device: efi-fs
+              path: /boot/efi
+
+            # lvm
+            - type: partition
+              size: -1 
+              device: disk0
+              id: lvm-partition
+
+            - type: lvm_volgroup
+              id: vg0
+              name: ubuntu_vg
+              devices:
+                - lvm-partition
+            
+            # root 
+            - type: lvm_partition
+              id: lv_root
+              volgroup: vg0
+              name: lv_root
+              size: 100%
+
+            - type: format
+              id: root-fs
+              fstype: ext4
+              volume: lv_root
+
+            - type: mount 
+              id: root-mount
+              path: /
+              device: root-fs
+
+    late-commands:
+        - curtin in-target target=/target -- apt update 
+        - curtin in-target target=/target -- apt upgrade -y
+        - curtin in-target target=/target -- systemctl enable docker
+        - curtin in-target target=/target -- systemctl enable nginx
+
+    runcmd:
+      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+      - rustup default stable
